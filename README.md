@@ -10,6 +10,18 @@ We took that and built a framework around it. The whole thing is a set of markdo
 
 ## Quick Start
 
+### Install via Skills CLI (recommended)
+
+```bash
+npx skills add Ar9av/obsidian-wiki
+```
+
+This installs all wiki skills into your current agent (Claude Code, Cursor, Codex, etc.). Then open your agent and say **"set up my wiki"**.
+
+Browse the full skill list at [skills.sh/ar9av/obsidian-wiki](https://skills.sh/ar9av/obsidian-wiki).
+
+### Install via git clone
+
 ```bash
 git clone https://github.com/Ar9av/obsidian-wiki.git
 cd obsidian-wiki
@@ -251,12 +263,7 @@ Both projects use the same [Agent Skills spec](https://agentskills.io/specificat
 **Install:**
 
 ```bash
-# Via npx (if skills CLI is available)
-npx skills add git@github.com:kepano/obsidian-skills.git
-
-# Or manually — copy into your skills directory
-git clone https://github.com/kepano/obsidian-skills.git /tmp/obsidian-skills
-cp -r /tmp/obsidian-skills/skills/* .skills/
+npx skills add kepano/obsidian-skills
 ```
 
 After installing, your agent will automatically pick up the new skills alongside the existing wiki skills.
