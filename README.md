@@ -2,6 +2,9 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Ar9av/obsidian-wiki)
 
+
+<img width="1536" height="1024" alt="obisidian-wiki" src="https://github.com/user-attachments/assets/a2fc3158-8e73-4817-9803-cff043e6deaa" />
+
 A knowledge mgmt system inspired by [gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) published by Andrej Karpathy about maintaining a personal knowledge base with LLMs : the "LLM Wiki" pattern.
 
 Instead of asking an LLM the same questions over over (or doing RAG every time), you compile knowledge once into interconnected markdown files and keep them current. In this case Obsidian is the viewer and the LLM is the maintainer.
