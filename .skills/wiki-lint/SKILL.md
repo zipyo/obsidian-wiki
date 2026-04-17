@@ -137,6 +137,21 @@ Checks whether pages that share a tag are actually linked to each other. Tags im
 - Run the `cross-linker` skill targeted at the fragmented tag — it will surface and insert the missing links
 - If a tag group is large (n > 15) and still fragmented, consider splitting it into more specific sub-tags
 
+### 9. Visibility Tag Consistency
+
+Checks that `visibility/` tags are applied correctly and aren't silently missing where they matter.
+
+**How to check:**
+
+- **Untagged PII patterns:** Grep page bodies for patterns that commonly indicate sensitive data — lines containing `password`, `api_key`, `secret`, `token`, `ssn`, `email:`, `phone:` followed by an actual value (not a field description). If a page matches and lacks `visibility/pii` or `visibility/internal`, flag it as a likely mis-classification.
+- **`visibility/pii` without `sources:`:** A page tagged `visibility/pii` should always have a `sources:` frontmatter field — if there's no provenance, there's no way to verify the classification. Flag any `visibility/pii` page missing `sources:`.
+- **Visibility tags in taxonomy:** `visibility/` tags are system tags and must **not** appear in `_meta/taxonomy.md`. If found there, flag as misconfigured — they'd be counted toward the 5-tag limit on pages that include them.
+
+**How to fix:**
+- For untagged PII patterns: add `visibility/pii` (or `visibility/internal` if it's team-context rather than personal data) to the page's frontmatter tags
+- For missing `sources:`: add provenance or escalate to the user — don't auto-fill
+- For taxonomy contamination: remove the `visibility/` entries from `_meta/taxonomy.md`
+
 ## Output Format
 
 Report findings as a structured list:
@@ -175,13 +190,18 @@ Report findings as a structured list:
 ### Fragmented Tag Clusters (N found)
 - **#systems** — 7 pages, cohesion=0.06 ⚠️ — run cross-linker on this tag
 - **#databases** — 5 pages, cohesion=0.10 ⚠️
+
+### Visibility Issues (N found)
+- `entities/user-records.md` — contains `email:` value pattern but no `visibility/pii` tag
+- `concepts/auth-flow.md` — tagged `visibility/pii` but missing `sources:` frontmatter
+- `_meta/taxonomy.md` — contains `visibility/internal` entry (system tag must not be in taxonomy)
 ```
 
 ## After Linting
 
 Append to `log.md`:
 ```
-- [TIMESTAMP] LINT issues_found=N orphans=X broken_links=Y stale=Z contradictions=W prov_issues=P missing_summary=S fragmented_clusters=F
+- [TIMESTAMP] LINT issues_found=N orphans=X broken_links=Y stale=Z contradictions=W prov_issues=P missing_summary=S fragmented_clusters=F visibility_issues=V
 ```
 
 Offer to fix issues automatically or let the user decide which to address.

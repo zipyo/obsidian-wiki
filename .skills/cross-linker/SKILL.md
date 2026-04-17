@@ -58,6 +58,7 @@ For each page in the vault:
 ### Matching Rules
 
 - **Case-insensitive matching** for names (e.g., "my-project" matches page `MyProject`)
+- **Diacritic-insensitive matching** — normalize both the page name and the body text with Unicode NFKD (decompose accented characters to base + combining marks, strip combining marks) before comparing. This ensures body text "Muller" matches page `[[entities/müller]]` and vice versa.
 - **Skip self-references** — a page shouldn't link to itself
 - **Skip common words** — don't link "the", "and", generic terms. Only match on distinctive names
 - **Prefer the shortest unambiguous wikilink path** — use `[[page-name]]` not `[[full/path/to/page-name]]` when the name is unique across the vault
