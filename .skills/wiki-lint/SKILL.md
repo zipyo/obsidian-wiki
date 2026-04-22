@@ -152,6 +152,19 @@ Checks that `visibility/` tags are applied correctly and aren't silently missing
 - For missing `sources:`: add provenance or escalate to the user — don't auto-fill
 - For taxonomy contamination: remove the `visibility/` entries from `_meta/taxonomy.md`
 
+### 10. Misc Promotion Candidates
+
+Find pages in `misc/` that have accumulated enough project affinity to be promoted.
+
+**How to check:**
+- Glob `$OBSIDIAN_VAULT_PATH/misc/*.md`
+- For each page, read the `affinity` frontmatter field
+- Flag pages where any single project's score ≥ 3
+
+**How to fix:**
+- Run the `cross-linker` skill first if affinity scores look stale (e.g., `affinity: {}` on a page with many wikilinks)
+- To promote: move the page to `projects/<project-name>/references/` (or another appropriate category), update its `category` frontmatter, remove `promotion_status`, and grep the vault for backlinks to update them
+
 ## Output Format
 
 Report findings as a structured list:
@@ -195,13 +208,20 @@ Report findings as a structured list:
 - `entities/user-records.md` — contains `email:` value pattern but no `visibility/pii` tag
 - `concepts/auth-flow.md` — tagged `visibility/pii` but missing `sources:` frontmatter
 - `_meta/taxonomy.md` — contains `visibility/internal` entry (system tag must not be in taxonomy)
+
+### Misc Promotion Candidates (N found)
+Pages in misc/ that have ≥ 3 connections to a single project and are ready to be promoted:
+
+| Page | Top Project | Affinity Score |
+|---|---|---|
+| `misc/web-martinfowler-articles-microservices.md` | `obsidian-wiki` | 4 |
 ```
 
 ## After Linting
 
 Append to `log.md`:
 ```
-- [TIMESTAMP] LINT issues_found=N orphans=X broken_links=Y stale=Z contradictions=W prov_issues=P missing_summary=S fragmented_clusters=F visibility_issues=V
+- [TIMESTAMP] LINT issues_found=N orphans=X broken_links=Y stale=Z contradictions=W prov_issues=P missing_summary=S fragmented_clusters=F visibility_issues=V promotion_candidates=C
 ```
 
 Offer to fix issues automatically or let the user decide which to address.
