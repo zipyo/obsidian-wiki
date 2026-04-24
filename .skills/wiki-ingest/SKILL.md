@@ -173,6 +173,13 @@ For each page in your plan:
 
 **Write a `summary:` frontmatter field** on every new page (1–2 sentences, ≤200 characters) answering "what is this page about?" for a reader who hasn't opened it. When updating an existing page whose meaning has shifted, rewrite the summary to match the new content. This field is what `wiki-query`'s cheap retrieval path reads — a missing or stale summary forces expensive full-page reads.
 
+**Apply a `visibility/` tag** if the content clearly warrants one (optional):
+- `visibility/internal` — architecture internals, system credentials patterns, team-only context
+- `visibility/pii` — content that references personal data, user records, or sensitive identifiers
+- No tag (default) — anything that's safe to surface in user-facing answers
+
+`visibility/` tags are system tags and do **not** count toward the 5-tag limit. When in doubt, omit — untagged pages are treated as public. Never add a visibility tag just because a topic sounds technical.
+
 **Apply provenance markers** per the convention in `llm-wiki` (Provenance Markers section):
 - Inferred claims get a trailing `^[inferred]`
 - Ambiguous/contested claims get a trailing `^[ambiguous]`
@@ -209,6 +216,22 @@ If the manifest doesn't exist yet, create it with `version: 1`.
 **`log.md`** — Append an entry:
 ```
 - [TIMESTAMP] INGEST source="path/to/source" pages_updated=N pages_created=M mode=append|full
+```
+
+**`hot.md`** — Read `$OBSIDIAN_VAULT_PATH/hot.md` (create from template below if missing). Rewrite the **Recent Activity** section to reflect what you just ingested — keep it to the last 3 operations max. Update **Key Takeaways** and **Active Threads** if the content materially shifted them. Update the `updated` timestamp.
+
+Write the *conceptual* change, not a file list. Example: "Ingested Fowler's microservices article — 3 new concept pages on service decomposition, API gateway, bounded contexts."
+
+hot.md template (use if the file doesn't exist):
+```markdown
+---
+title: Hot Cache
+updated: TIMESTAMP
+---
+## Recent Activity
+## Active Threads
+## Key Takeaways
+## Flagged Contradictions
 ```
 
 ## Handling Multiple Sources

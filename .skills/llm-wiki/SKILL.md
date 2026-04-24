@@ -286,6 +286,7 @@ For details on specific operations, see the companion skills:
 - **wiki-rebuild** — Archive current wiki, rebuild from scratch, or restore from archive
 - **wiki-ingest** — Distill source documents into wiki pages
 - **claude-history-ingest** — Ingest Claude conversation history
+- **codex-history-ingest** — Ingest Codex CLI session history
 - **data-ingest** — Ingest any raw text data
 - **wiki-query** — Answer questions against the wiki
 - **wiki-lint** — Audit and maintain wiki health

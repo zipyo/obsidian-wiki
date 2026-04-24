@@ -1,6 +1,8 @@
 # Setup
 
-A skill-based framework for AI coding agents (Claude Code, Cursor, Windsurf, etc.) to build and maintain an Obsidian wiki using Karpathy's LLM Wiki pattern. No scripts, no API keys — the agent **is** the LLM.
+A skill-based framework for AI coding agents — Claude Code, Cursor, Windsurf, Gemini CLI, Google Antigravity, Codex, Hermes, OpenClaw, OpenCode, Aider, Factory Droid, Trae / Trae CN, Kiro, GitHub Copilot (CLI + VS Code Chat) — to build and maintain an Obsidian wiki using Karpathy's LLM Wiki pattern. No scripts, no API keys — the agent **is** the LLM.
+
+> Running `bash setup.sh` wires up every supported agent: project-local skill symlinks (`.claude/skills/`, `.cursor/skills/`, `.windsurf/skills/`, `.agents/skills/`, `.kiro/skills/`), global symlinks (`~/.claude/skills/`, `~/.gemini/skills/`, `~/.codex/skills/`, `~/.hermes/skills/`, `~/.openclaw/skills/`, `~/.copilot/skills/`, `~/.trae/skills/`, `~/.trae-cn/skills/`, `~/.kiro/skills/`, `~/.agents/skills/`), and always-on rule files (`CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, `.hermes.md`, `.cursor/rules/…`, `.windsurf/rules/…`, `.kiro/steering/…`, `.agent/rules/…`, `.agent/workflows/…`, `.github/copilot-instructions.md`). See the [Agent Compatibility table in README.md](README.md#agent-compatibility) for the full matrix.
 
 ## Quick Start
 
@@ -26,7 +28,9 @@ Open this project in your coding agent and tell it what you want:
 |---|---|
 | "Set up my wiki" | `wiki-setup` |
 | "Ingest my documents from ~/research" | `wiki-ingest` |
+| "/wiki-history-ingest claude" or "/wiki-history-ingest codex" | `wiki-history-ingest` |
 | "Import my Claude history" | `claude-history-ingest` |
+| "Import my Codex history" | `codex-history-ingest` |
 | "Process this ChatGPT export" | `data-ingest` |
 | "What's the status of my wiki?" | `wiki-status` |
 | "What do I know about X?" | `wiki-query` |
@@ -47,6 +51,7 @@ Anything text-based:
 |---|---|---|
 | Markdown, PDFs, text files | `wiki-ingest` | Any document directory |
 | Claude Code history | `claude-history-ingest` | `~/.claude/` — conversations, memories, sessions |
+| Codex CLI history | `codex-history-ingest` | `~/.codex/` — sessions, rollouts, history index |
 | ChatGPT exports | `data-ingest` | `conversations.json` from ChatGPT export |
 | Slack / Discord logs | `data-ingest` | Channel export JSON files |
 | Meeting transcripts | `data-ingest` | Any text transcript |
@@ -111,6 +116,7 @@ Knowledge that's project-specific goes under `projects/<name>/`. Knowledge that'
 | `OBSIDIAN_CATEGORIES` | Wiki page categories | `concepts,entities,skills,references,synthesis,journal` |
 | `OBSIDIAN_MAX_PAGES_PER_INGEST` | Max pages updated per ingest | `15` |
 | `CLAUDE_HISTORY_PATH` | Where to find Claude data | *auto-discovers from `~/.claude`* |
+| `CODEX_HISTORY_PATH` | Where to find Codex data | *defaults to `~/.codex`* |
 | `LINT_SCHEDULE` | Wiki health check frequency | `weekly` |
 
 ## Skills Reference
@@ -120,8 +126,10 @@ Knowledge that's project-specific goes under `projects/<name>/`. Knowledge that'
 | `llm-wiki` | Core pattern — 3-layer architecture, page templates, project org |
 | `wiki-setup` | Initialize vault structure, create index/log, configure Obsidian |
 | `wiki-ingest` | Distill source documents into wiki pages (append or full mode) |
+| `wiki-history-ingest` | Unified history ingest router (`claude` or `codex`) |
 | `data-ingest` | Ingest any raw text — chat exports, logs, transcripts, anything |
 | `claude-history-ingest` | Mine `~/.claude` conversations and memories into wiki pages |
+| `codex-history-ingest` | Mine `~/.codex` sessions and rollout logs into wiki pages |
 | `wiki-status` | Audit: what's ingested, what's pending, delta, recommend action |
 | `wiki-rebuild` | Archive current wiki, rebuild from scratch, or restore from archive |
 | `wiki-query` | Answer questions from the compiled wiki with citations |

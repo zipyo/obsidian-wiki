@@ -6,14 +6,27 @@
 #
 # What it does:
 #   1. Creates .env from .env.example (if not present)
-#   2. Symlinks .skills/* into each agent's expected skills directory:
-#      - .claude/skills/    (Claude Code)
-#      - .cursor/skills/    (Cursor)
-#      - .windsurf/skills/  (Windsurf)
-#      - .agents/skills/    (Antigravity / generic agents)
-#   3b. Symlinks skills globally into ~/.gemini/antigravity/skills/ (Gemini)
-#   3c. Symlinks skills globally into ~/.codex/skills/ (Codex)
-#   4. Prints a summary of what's ready
+#   2. Writes ~/.obsidian-wiki/config so skills work from any project
+#   3. Symlinks .skills/* into each agent's expected skills directory:
+#      Project-local:
+#        - .claude/skills/        (Claude Code)
+#        - .cursor/skills/        (Cursor)
+#        - .windsurf/skills/      (Windsurf)
+#        - .agents/skills/        (AGENTS.md-aware agents, generic)
+#        - .kiro/skills/          (Kiro IDE/CLI)
+#      Global:
+#        - ~/.claude/skills/      (Claude Code, portable skills only)
+#        - ~/.gemini/skills/      (Gemini CLI)
+#        - ~/.codex/skills/       (Codex)
+#        - ~/.hermes/skills/      (Hermes)
+#        - ~/.openclaw/skills/    (OpenClaw)
+#        - ~/.copilot/skills/     (GitHub Copilot CLI)
+#        - ~/.trae/skills/        (Trae)
+#        - ~/.trae-cn/skills/     (Trae CN)
+#        - ~/.kiro/skills/        (Kiro CLI)
+#        - ~/.agents/skills/      (OpenCode, Aider, Factory Droid, generic)
+#   4. Bootstraps AGENTS.md aliases (CLAUDE.md, GEMINI.md, .hermes.md)
+#   5. Prints a summary of what's ready
 #
 set -e
 
@@ -88,12 +101,28 @@ OBSIDIAN_WIKI_REPO="$SCRIPT_DIR"
 EOF
 echo "✅  Global config written to ~/.obsidian-wiki/config"
 
+# ── Step 1c: Bootstrap symlinks ──────────────────────────────
+# .hermes.md → AGENTS.md  (Hermes resolves .hermes.md before AGENTS.md;
+# a symlink keeps a single source of truth)
+HERMES_BOOTSTRAP="$SCRIPT_DIR/.hermes.md"
+if [ -L "$HERMES_BOOTSTRAP" ]; then
+  rm "$HERMES_BOOTSTRAP"
+elif [ -f "$HERMES_BOOTSTRAP" ]; then
+  echo "⚠️   .hermes.md is a regular file, replacing with symlink"
+  rm "$HERMES_BOOTSTRAP"
+fi
+ln -s AGENTS.md "$HERMES_BOOTSTRAP"
+echo "✅  .hermes.md → AGENTS.md"
+
 # ── Step 2: Symlink skills into agent directories ─────────────
+# Project-local skill dirs. Each of these is where the matching agent looks
+# for skills scoped to this repo.
 AGENT_DIRS=(
   ".claude/skills"
   ".cursor/skills"
   ".windsurf/skills"
   ".agents/skills"
+  ".kiro/skills"        # Kiro IDE/CLI (paired with .kiro/steering/obsidian-wiki.md)
 )
 
 for agent_dir in "${AGENT_DIRS[@]}"; do
@@ -116,12 +145,21 @@ for skill_name in "wiki-update" "wiki-query"; do
 done
 echo "✅  Installed global skills → ~/.claude/skills/ (wiki-update, wiki-query)"
 
-# Steps 3b–3d: Install all skills for Gemini, Codex, and generic agents
+# Steps 3b–3j: Install all skills for every supported agent.
 # OpenClaw discovers skills from ~/.agents/skills/ (per docs.openclaw.ai/skills);
-# that path also covers OpenCode, Factory Droid, and any AGENTS.md-aware agent.
-install_skills "$HOME/.gemini/antigravity/skills" "~/.gemini/antigravity/skills/"
+# that path also covers OpenCode, Factory Droid, Aider, and any AGENTS.md-aware
+# agent. Platforms that have a dedicated skills dir get their own symlink tree
+# so discovery works regardless of whether the user relies on AGENTS.md.
+install_skills "$HOME/.gemini/skills"             "~/.gemini/skills/ (Gemini CLI)"
+install_skills "$HOME/.gemini/antigravity/skills" "~/.gemini/antigravity/skills/ (Antigravity, legacy)"
 install_skills "$HOME/.codex/skills"              "~/.codex/skills/"
-install_skills "$HOME/.agents/skills"             "~/.agents/skills/ (OpenClaw + generic)"
+install_skills "$HOME/.hermes/skills"             "~/.hermes/skills/ (Hermes)"
+install_skills "$HOME/.openclaw/skills"           "~/.openclaw/skills/ (OpenClaw managed)"
+install_skills "$HOME/.copilot/skills"            "~/.copilot/skills/ (GitHub Copilot CLI)"
+install_skills "$HOME/.trae/skills"               "~/.trae/skills/ (Trae)"
+install_skills "$HOME/.trae-cn/skills"            "~/.trae-cn/skills/ (Trae CN)"
+install_skills "$HOME/.kiro/skills"               "~/.kiro/skills/ (Kiro CLI)"
+install_skills "$HOME/.agents/skills"             "~/.agents/skills/ (OpenCode, Aider, Droid, generic)"
 
 # ── Step 4: Summary ──────────────────────────────────────────
 SKILL_COUNT=$(echo "$SKILLS_DIR"/*/  | tr ' ' '\n' | grep -c /)
@@ -131,15 +169,21 @@ echo "────────────────────────�
 echo " Setup complete!"
 echo ""
 echo " Skills found:    $SKILL_COUNT"
-echo " Agents ready:    Claude Code, Cursor, Windsurf, Antigravity/Gemini, Codex, OpenClaw"
+echo " Agents ready:    Claude Code, Cursor, Windsurf, Gemini CLI, Antigravity,"
+echo "                  Codex, Hermes, OpenClaw, OpenCode, Aider, Factory Droid,"
+echo "                  Trae, Trae CN, Kiro, GitHub Copilot (CLI + VS Code Chat)"
 echo ""
 echo " Bootstrap files:"
-echo "   CLAUDE.md       → Claude Code"
-echo "   GEMINI.md       → Gemini / Antigravity"
-echo "   AGENTS.md       → Codex, OpenClaw, OpenCode, Droid"
-echo "   .cursor/rules/  → Cursor"
-echo "   .windsurf/rules/ → Windsurf"
-echo "   .github/copilot-instructions.md → GitHub Copilot"
+echo "   CLAUDE.md                            → Claude Code"
+echo "   GEMINI.md                            → Gemini / Antigravity"
+echo "   AGENTS.md                            → Codex, OpenClaw, OpenCode, Aider, Droid, Trae, Hermes"
+echo "   .hermes.md                           → Hermes (symlink → AGENTS.md)"
+echo "   .cursor/rules/obsidian-wiki.mdc      → Cursor (alwaysApply)"
+echo "   .windsurf/rules/obsidian-wiki.md     → Windsurf (always-on)"
+echo "   .kiro/steering/obsidian-wiki.md      → Kiro (inclusion: always)"
+echo "   .agent/rules/obsidian-wiki.md        → Google Antigravity (alwaysApply)"
+echo "   .agent/workflows/obsidian-wiki.md    → Google Antigravity (slash commands)"
+echo "   .github/copilot-instructions.md      → GitHub Copilot (VS Code Chat)"
 echo ""
 echo " Next steps:"
 echo "   1. Open this project in your agent"

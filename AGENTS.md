@@ -17,9 +17,11 @@ Both files set `OBSIDIAN_VAULT_PATH` (where the wiki lives). The global config a
 $OBSIDIAN_VAULT_PATH/
 ├── index.md                # Master index — every page listed, always kept current
 ├── log.md                  # Chronological activity log (ingests, updates, lints)
+├── hot.md                  # Session hot cache — ~500-word semantic snapshot of recent activity
 ├── .manifest.json          # Tracks every ingested source: path, timestamps, pages produced
 ├── _meta/
-│   └── taxonomy.md         # Controlled tag vocabulary
+│   ├── taxonomy.md         # Controlled tag vocabulary
+│   └── *.base              # Obsidian Bases dashboard definitions (wiki-dashboard skill)
 ├── _insights.md            # Graph analysis output (hubs, bridges, dead ends)
 ├── _raw/                   # Staging area — drop rough notes here, next ingest promotes them
 ├── concepts/               # Abstract ideas, patterns, mental models
@@ -41,8 +43,13 @@ Skills live in `.skills/<name>/SKILL.md`. Match the user's intent to the right s
 | User says something like… | Skill |
 |---|---|
 | "set up my wiki" / "initialize" | `wiki-setup` |
+| "/wiki-history-ingest claude" / "/wiki-history-ingest codex" / "/wiki-history-ingest hermes" | `wiki-history-ingest` |
+| "/ingest-url <url>" / "add this URL" / "ingest this link" / "save this page" | `ingest-url` |
 | "ingest" / "add this to the wiki" / "process these docs" | `wiki-ingest` |
 | "import my Claude history" / "mine my conversations" | `claude-history-ingest` |
+| "import my Codex history" / "mine my Codex sessions" | `codex-history-ingest` |
+| "import my Hermes history" / "mine my Hermes memories" / "ingest ~/.hermes" | `hermes-history-ingest` |
+| "import my OpenClaw history" / "mine my OpenClaw sessions" / "ingest ~/.openclaw" | `openclaw-history-ingest` |
 | "process this export" / "ingest this data" / logs, transcripts | `data-ingest` |
 | "what's the status" / "what's been ingested" / "show the delta" | `wiki-status` |
 | "wiki insights" / "hubs" / "wiki structure" | `wiki-status` (insights mode) |
@@ -53,6 +60,10 @@ Skills live in `.skills/<name>/SKILL.md`. Match the user's intent to the right s
 | "fix my tags" / "normalize tags" / "tag audit" | `tag-taxonomy` |
 | "update wiki" / "sync to wiki" / "save this to my wiki" | `wiki-update` |
 | "export wiki" / "export graph" / "graphml" / "neo4j" | `wiki-export` |
+| "color my graph" / "color code obsidian" / "color by tag/category/visibility" | `graph-colorize` |
+| "save this" / "/wiki-capture" / "capture this" / "file this conversation" | `wiki-capture` |
+| "/wiki-research [topic]" / "research X" / "find everything about Y" | `wiki-research` |
+| "create a dashboard" / "vault dashboard" / "show all X as a table" / "dynamic view" | `wiki-dashboard` |
 | "create a new skill" | `skill-creator` |
 
 ## Cross-Project Usage
@@ -76,12 +87,31 @@ On repeat runs, it checks `last_commit_synced` in `.manifest.json` and only proc
 3. Only open page bodies when the index pass can't answer
 4. Return a synthesized answer with `[[wikilink]]` citations
 
+## Visibility Tags (optional)
+
+Pages can carry a `visibility/` tag to mark their intended reach. **This is entirely optional** — untagged pages behave exactly as they always have (visible everywhere). The system stays single-vault, single source of truth.
+
+| Tag | Meaning |
+|---|---|
+| *(no tag)* | Same as `visibility/public` — visible in all modes |
+| `visibility/public` | Explicitly public — visible in all modes |
+| `visibility/internal` | Team-only — excluded when querying in filtered mode |
+| `visibility/pii` | Sensitive data — excluded when querying in filtered mode |
+
+**Filtered mode** is opt-in, triggered by phrases like "public only", "user-facing answer", "no internal content", or "as a user would see it" in a query. Default mode shows everything.
+
+`visibility/` tags are **system tags** — they don't count toward the 5-tag limit and are listed separately from domain/type tags in the taxonomy.
+
+See `wiki-query` and `wiki-export` skills for how the filter is applied.
+
 ## Core Principles
 
 - **Compile, don't retrieve.** The wiki is pre-compiled knowledge. Update existing pages — don't append or duplicate.
-- **Track everything.** Update `.manifest.json` after ingesting, `index.md` and `log.md` after any operation.
+- **Track everything.** Update `.manifest.json` after ingesting, `index.md`, `log.md`, and `hot.md` after any write operation.
 - **Connect with `[[wikilinks]]`.** Every page should link to related pages. This is what makes it a knowledge graph, not a folder of files.
 - **Frontmatter is required.** Every wiki page needs: `title`, `category`, `tags`, `sources`, `created`, `updated`.
+- **Single source of truth.** Visibility tags shape how content is surfaced — they don't duplicate or separate it.
+- **Keep context warm.** `hot.md` is a ~500-word semantic snapshot of recent activity. Every write skill updates it so the next session can pick up where the last one left off without crawling the full vault.
 
 ## Architecture Reference
 

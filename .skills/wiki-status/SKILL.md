@@ -16,7 +16,7 @@ You are computing the current state of the wiki: what's been ingested, what's ne
 
 ## Before You Start
 
-1. Read `.env` to get `OBSIDIAN_VAULT_PATH`, `OBSIDIAN_SOURCES_DIR`, `CLAUDE_HISTORY_PATH`
+1. Read `.env` to get `OBSIDIAN_VAULT_PATH`, `OBSIDIAN_SOURCES_DIR`, `CLAUDE_HISTORY_PATH`, `CODEX_HISTORY_PATH`
 2. Read `.manifest.json` at the vault root — this is the ingest tracking ledger
 
 ## The Manifest
@@ -84,6 +84,15 @@ Glob: ~/.claude/projects/*/memory/*.md → memory files
 Record: path, size, modification time, parent project
 ```
 
+### Codex History (from `CODEX_HISTORY_PATH`)
+```
+Glob: ~/.codex/session_index.jsonl            → session inventory index
+Glob: ~/.codex/sessions/**/rollout-*.jsonl    → session rollout transcripts
+Glob: ~/.codex/history.jsonl                  → optional local history log
+Glob: ~/.codex/archived_sessions/**/rollout-*.jsonl → archived rollouts (if user wants archive coverage)
+Record: path, size, modification time, inferred project from cwd when available
+```
+
 ### Any other sources the user has pointed at previously
 Check the manifest for source paths outside the standard directories.
 
@@ -106,7 +115,19 @@ For Claude history specifically, also compute:
 - New conversations within existing projects
 - Updated memory files
 
+For Codex history specifically, also compute:
+- New rollout files under `sessions/**`
+- Updated `session_index.jsonl` entries (session title/freshness changes)
+- Archived rollout delta only when archive coverage is requested
+
 ## Step 3: Report the Status
+
+**Visibility tally (before rendering the report):** Grep frontmatter across all vault `.md` pages for `visibility/internal` and `visibility/pii` tag values. Count:
+- `public` = pages with `visibility/public` tag **or** no `visibility/` tag at all
+- `internal` = pages with `visibility/internal` tag
+- `pii` = pages with `visibility/pii` tag
+
+Include this in the Overview section as `Page visibility: N public · M internal · K pii`. Skip the line if all pages are untagged (fully public vault).
 
 Present a clear summary:
 
@@ -115,6 +136,7 @@ Present a clear summary:
 
 ## Overview
 - **Total wiki pages:** 87 across 6 categories
+- **Page visibility:** 72 public · 11 internal · 4 pii
 - **Total sources ingested:** 42
 - **Projects tracked:** 6
 - **Last ingest:** 2026-04-06T11:00:00Z
@@ -126,6 +148,7 @@ Present a clear summary:
 |---|---|---|
 | ~/Documents/research/new-paper.pdf | document | 2.1 MB |
 | ~/.claude/projects/-Users-.../session-xyz.jsonl | claude_conversation | 340 KB |
+| ~/.codex/sessions/2026/04/12/rollout-...jsonl | codex_rollout | 220 KB |
 | ... | | |
 
 ### Modified sources (need re-ingesting): 3
@@ -292,5 +315,5 @@ After writing the file, append to `log.md`:
 
 - If the manifest doesn't exist, report everything as "new" and recommend a full ingest
 - This skill only reads and reports — it doesn't modify anything (except writing `_insights.md` in insights mode, which is regenerable)
-- The actual ingest work is done by the ingest skills (`wiki-ingest`, `claude-history-ingest`, `data-ingest`)
+- The actual ingest work is done by the ingest skills (`wiki-ingest`, `claude-history-ingest`, `codex-history-ingest`, `data-ingest`)
 - Those skills are responsible for updating the manifest after they finish

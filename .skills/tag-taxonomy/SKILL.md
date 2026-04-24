@@ -30,6 +30,25 @@ The canonical tag vocabulary lives at `$OBSIDIAN_VAULT_PATH/_meta/taxonomy.md`. 
 
 **Always read this file before tagging.** It's the source of truth.
 
+## Reserved System Tags
+
+`visibility/` is a reserved tag group with special rules. These tags are **not** domain or type tags and are managed separately from the taxonomy vocabulary:
+
+| Tag | Purpose |
+|---|---|
+| `visibility/public` | Explicitly public — shown in all modes (same as no tag) |
+| `visibility/internal` | Team-only — excluded in filtered query/export mode |
+| `visibility/pii` | Sensitive data — excluded in filtered query/export mode |
+
+**Rules for `visibility/` tags:**
+- They do **not** count toward the 5-tag limit
+- Only one `visibility/` tag per page
+- Omit entirely when content is clearly public — no tag needed
+- Never add `visibility/internal` just because content is technical; use it only for genuinely team-restricted knowledge
+- When running a tag audit, report `visibility/` tag usage separately — do not flag them as unknown or non-canonical
+
+When normalizing tags, leave `visibility/` tags untouched — they are not subject to alias mapping.
+
 ## Mode 1: Tag Audit
 
 When the user wants to see the current state of tags:
@@ -160,3 +179,5 @@ Or for normalization:
 ```
 - [TIMESTAMP] TAG_NORMALIZE tags_renamed=N pages_modified=M new_tags_added=P
 ```
+
+**`hot.md`** — Read `$OBSIDIAN_VAULT_PATH/hot.md` (create from the template in `wiki-ingest` if missing). Update **Recent Activity** with a one-line summary — e.g. "Tag audit: normalized 14 tags across 28 pages; 2 new canonical tags added." Keep the last 3 operations. Update `updated` timestamp.

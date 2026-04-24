@@ -17,9 +17,22 @@ You are exporting the wiki's wikilink graph to structured formats so it can be u
 1. Read `.env` to get `OBSIDIAN_VAULT_PATH`
 2. Confirm the vault has pages to export — if fewer than 5 pages exist, warn the user and stop
 
+## Visibility Filter (optional)
+
+By default, **all pages are exported** regardless of visibility tags. This preserves existing behavior.
+
+If the user requests a filtered export — phrases like **"public export"**, **"user-facing export"**, **"exclude internal"**, **"no internal pages"** — activate **filtered mode**:
+
+- Build a **blocked tag set**: `{visibility/internal, visibility/pii}`
+- Skip any page whose frontmatter tags contain a blocked tag when building the node list
+- Skip any edge where either endpoint was excluded
+- Note the filter in the summary: `(filtered: visibility/internal, visibility/pii excluded)`
+
+Pages with no `visibility/` tag, or tagged `visibility/public`, are always included.
+
 ## Step 1: Build the Node and Edge Lists
 
-Glob all `.md` files in the vault (excluding `_archives/`, `_raw/`, `.obsidian/`, `index.md`, `log.md`, `_insights.md`).
+Glob all `.md` files in the vault (excluding `_archives/`, `_raw/`, `.obsidian/`, `index.md`, `log.md`, `_insights.md`). In filtered mode, also skip pages whose tags contain `visibility/internal` or `visibility/pii`.
 
 For each page, extract from frontmatter:
 - `id` — relative path from vault root, without `.md` extension (e.g. `concepts/transformers`)
@@ -243,6 +256,11 @@ Wiki export complete → wiki-export/
   graph.graphml — N nodes, M edges (Gephi / yEd / Cytoscape)
   cypher.txt    — N MERGE nodes + M MERGE relationships (Neo4j)
   graph.html    — interactive browser visualization (open in any browser)
+```
+
+In filtered mode, append a line showing what was excluded:
+```
+  (filtered: X of Y pages excluded — visibility/internal, visibility/pii)
 ```
 
 ## Notes

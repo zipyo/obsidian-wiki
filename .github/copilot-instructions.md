@@ -7,7 +7,7 @@ This project is a **skill-based framework** for building and maintaining an Obsi
 - **Purpose:** Build and maintain an Obsidian wiki using the LLM Wiki pattern (Andrej Karpathy).
 - **Tech Stack:** Markdown only. No code, no dependencies. The AI agent IS the runtime.
 - **Key Config:** `.env` contains `OBSIDIAN_VAULT_PATH` pointing to the vault location.
-- **Skills:** `.skills/` contains 12 skill folders, each with a `SKILL.md` defining a workflow.
+- **Skills:** `.skills/` contains skill folders, each with a `SKILL.md` defining a workflow.
 
 ## Key Concepts
 
@@ -23,7 +23,9 @@ This project is a **skill-based framework** for building and maintaining an Obsi
 |---|---|---|
 | Setup | `.skills/wiki-setup/` | Initialize vault structure |
 | Ingest | `.skills/wiki-ingest/` | Distill documents into wiki pages |
+| History Router | `.skills/wiki-history-ingest/` | Route `/wiki-history-ingest <claude|codex>` to the right history skill |
 | Claude History | `.skills/claude-history-ingest/` | Mine `~/.claude` conversations |
+| Codex History | `.skills/codex-history-ingest/` | Mine `~/.codex` sessions and rollout logs |
 | Data Ingest | `.skills/data-ingest/` | Process any text data |
 | Status | `.skills/wiki-status/` | Audit ingestion state and delta |
 | Query | `.skills/wiki-query/` | Answer questions from wiki |
