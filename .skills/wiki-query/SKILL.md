@@ -15,9 +15,10 @@ You are answering questions against a compiled Obsidian wiki, not raw source doc
 
 ## Before You Start
 
-1. Read `~/.obsidian-wiki/config` to get `OBSIDIAN_VAULT_PATH` (works from any project). Fall back to `.env` if you're inside the obsidian-wiki repo.
-2. If `$OBSIDIAN_VAULT_PATH/hot.md` exists, read it first — it gives you instant context on recent activity. If the user's question is about something ingested recently, hot.md may answer it before you even open `index.md`.
-3. Read `$OBSIDIAN_VAULT_PATH/index.md` to understand the wiki's scope and structure
+1. **Resolve config** — follow the Config Resolution Protocol in `llm-wiki/SKILL.md` (walk up CWD for `.env` → `~/.obsidian-wiki/config` → prompt setup). Prefer `~/.obsidian-wiki/config` for cross-project queries when present, even if it is a symlink to the vault `.env`. This gives `OBSIDIAN_VAULT_PATH` and any QMD variables. Works from any project directory.
+2. **Load QMD settings from the resolved config** before deciding retrieval strategy. If `QMD_WIKI_COLLECTION` is set, treat QMD as available subject only to transport/tool checks below. If it is empty or unset, say briefly why QMD is being skipped before using grep/page reads.
+3. If `$OBSIDIAN_VAULT_PATH/hot.md` exists, read it first — it gives you instant context on recent activity. If the user's question is about something ingested recently, hot.md may answer it before you even open `index.md`.
+4. Read `$OBSIDIAN_VAULT_PATH/index.md` to understand the wiki's scope and structure
 
 ## Visibility Filter (optional)
 
@@ -42,7 +43,7 @@ In filtered mode, note the filter in the Step 6 log entry: `mode=filtered`.
 
 Classify the query type:
 - **Factual lookup** — "What is X?" → Find the relevant page(s)
-- **Relationship query** — "How does X relate to Y?" → Find both pages and their cross-references
+- **Relationship query** — "How does X relate to Y?" / "What contradicts X?" → Find both pages, their cross-references, and their `relationships:` frontmatter blocks for typed edges
 - **Synthesis query** — "What's the current thinking on X?" → Find all pages that touch X, synthesize
 - **Gap query** — "What don't I know about X?" → Find what's missing, check open questions sections
 
@@ -61,16 +62,29 @@ Build a candidate set *without opening any page bodies*:
   2. Tag match
   3. Summary field contains the query term
   4. `index.md` entry contains the query term
+- **Apply tier ordering within each rank bucket:** when two candidates score equally, prefer `tier: core` over `tier: supporting` over `tier: peripheral`. Read the `tier:` frontmatter field with the same cheap grep as other fields. Pages without a `tier:` field are treated as `supporting`.
 
 If you're in **index-only mode**, stop here. Answer from `summary:` fields, titles, and `index.md` descriptions only. Label the answer clearly: **"(index-only answer — page bodies not read; facts below are from page summaries and may miss nuance)"**. Then skip to Step 5.
 
-### Step 2b: QMD Semantic Pass (optional — requires `QMD_WIKI_COLLECTION` in `.env`)
+### Step 2b: QMD Semantic Pass (optional — requires `QMD_WIKI_COLLECTION` in resolved config)
 
-**GUARD: If `$QMD_WIKI_COLLECTION` is empty or unset, skip this entire step and proceed to Step 3.**
+**GUARD: If `$QMD_WIKI_COLLECTION` is empty or unset after config resolution, skip this entire step and proceed to Step 3. Mention the missing variable in your working update.**
 
 > **No QMD?** Skip to Step 3 and use `Grep` directly on the vault. QMD is faster and concept-aware but the grep path is fully functional. See `.env.example` for setup.
 
-If `QMD_WIKI_COLLECTION` is set and the index pass didn't produce clear candidates — or the question requires semantic matching rather than exact terms — use QMD before reaching for `Grep`:
+If `QMD_WIKI_COLLECTION` is set, run QMD before reaching for `Grep` unless the question is already fully answered by `hot.md` or `index.md` metadata. QMD is especially preferred when the question is semantic, project-specific, asks for related context, or uses terms that may not appear verbatim in titles/frontmatter.
+
+Choose the QMD transport from `$QMD_TRANSPORT`:
+
+- `mcp` (default): use the QMD MCP tool configured in the agent.
+- `cli`: run the local qmd CLI. Use `$QMD_CLI` if set; otherwise use `qmd`.
+
+For detailed CLI command selection, maintenance, and VM caveats, use the local
+`$qmd-cli` skill when it is installed.
+
+If the selected transport is unavailable (no MCP tool, `qmd` not on PATH, or the command errors), skip QMD and continue with Step 3.
+
+For MCP transport:
 
 ```
 mcp__qmd__query:
@@ -83,7 +97,26 @@ mcp__qmd__query:
       query: <question rephrased as a description>
 ```
 
-The returned snippets act as pre-read section summaries. If they answer the question fully, skip Step 3 and go straight to Step 4 (reading only the pages QMD ranked highest). If not, use the ranked file list to guide which files to grep or read in Step 3.
+For CLI transport, pick the command from `$QMD_CLI_SEARCH_MODE`:
+
+Keep operator-like or punctuation-heavy tokens such as `no-sudo`, `ansible_become=false`, and `~/.local/bin` in the `lex:` line. Rewrite the `vec:` line as plain natural language without hyphenated `-term` words; QMD treats `-term` as negation, and negation is not supported in `vec`/`hyde` queries.
+
+- `quality` (default): best relevance; slower on CPU.
+  ```bash
+  ${QMD_CLI:-qmd} query $'lex: <key terms>\nvec: <question rephrased as a description>' -c "$QMD_WIKI_COLLECTION" -n 8 --files
+  ```
+- `balanced`: hybrid search without LLM reranking; use when `quality` is too slow.
+  ```bash
+  ${QMD_CLI:-qmd} query $'lex: <key terms>\nvec: <question rephrased as a description>' -c "$QMD_WIKI_COLLECTION" -n 8 --no-rerank --files
+  ```
+- `fast`: semantic-only recall, or `search` instead when exact names, file paths, or error messages matter.
+  ```bash
+  ${QMD_CLI:-qmd} vsearch "<question rephrased as a description>" -c "$QMD_WIKI_COLLECTION" -n 8 --files
+  ```
+
+Use `${QMD_CLI:-qmd} get "#docid"` to retrieve a ranked document by docid when CLI output provides one.
+
+The returned snippets or ranked files act as pre-read section summaries. If they answer the question fully, skip Step 3 and go straight to Step 4 (reading only the pages QMD ranked highest). If not, use the ranked file list to guide which files to grep or read in Step 3.
 
 **Also search `papers` when the question may have source material in `_raw/`:**
 
@@ -101,8 +134,9 @@ For each of the top candidates, pull the relevant section *without reading the w
 
 Only when Steps 2 and 3 don't answer the question:
 
-- `Read` the top **3** candidates in full.
+- `Read` the top **3** candidates in full. When choosing which 3 to read, apply tier ordering: read `core` pages before `supporting`, and skip `peripheral` pages unless they are the only match.
 - Follow at most one hop of `[[wikilinks]]` from those pages if the answer requires cross-references.
+- **For relationship queries** ("How does X relate to Y?" / "What contradicts X?"): also read the `relationships:` frontmatter block of the candidate pages. Each entry gives a typed, directional edge (`extends`, `implements`, `contradicts`, `derived_from`, `uses`, `replaces`, `related_to`). Surface these explicitly in your answer — "Page A *contradicts* Page B (typed edge)" is more useful than "Page A links to Page B".
 - Check "Open Questions" sections for known gaps.
 - If you're still short, **then** fall back to a broad content grep across the vault. Tell the user you escalated — this is the expensive path and they should know.
 
@@ -114,6 +148,25 @@ Compose your answer from wiki content:
 - If the wiki has contradictions, present both sides
 - If the wiki doesn't cover something, say so explicitly
 - Suggest which sources might fill the gap
+
+**Page trust annotations:** For every page cited in your answer, check its `lifecycle` frontmatter and compute `is_stale = (today − updated) > 90 days`. Annotate risky pages inline so the user knows which citations to verify:
+
+| Condition | Annotation |
+|---|---|
+| `lifecycle: archived` | `(ARCHIVED: superseded by [[target]])` — use the successor instead |
+| `lifecycle: disputed` | `(DISPUTED, marked <lifecycle_changed>: <lifecycle_reason or "reason unspecified">)` |
+| `is_stale` + `lifecycle: verified` | `(VERIFIED but stale: last updated <updated>)` — reader should re-verify before relying |
+| `is_stale` (other lifecycle) | `(stale: last updated <updated>)` |
+
+Examples in a synthesized answer:
+```
+[[concept-page]] (stale: last updated 2026-01-15) — Original claim was X.
+[[verified-page]] (VERIFIED but stale: last updated 2025-09-10) — Reader should reverify before relying.
+[[disputed-page]] (DISPUTED, marked 2026-04-30: contradicted by [[new-source]]) — Earlier said Y, now uncertain.
+[[old-page]] (ARCHIVED: superseded by [[new-page]]) — Use the successor.
+```
+
+Pages with no lifecycle field (legacy pages predating the schema) are treated the same as `draft` — annotate if stale, skip otherwise. Never fabricate a `lifecycle_reason`; if the field is absent, omit the reason from the annotation.
 
 ### Step 6: Log the Query
 

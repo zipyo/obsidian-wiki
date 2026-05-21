@@ -15,10 +15,13 @@ You are ingesting source documents into an Obsidian wiki. Your job is not to sum
 
 ## Before You Start
 
-1. Read `~/.obsidian-wiki/config` (preferred) or `.env` (fallback) to get `OBSIDIAN_VAULT_PATH` and `OBSIDIAN_SOURCES_DIR`. Only read the specific variables you need — do not log, echo, or reference any other values from these files.
-2. Read `.manifest.json` at the vault root to check what's already been ingested
-3. Read `index.md` to understand current wiki content
-4. Read `log.md` to understand recent activity
+1. **Resolve config** — follow the Config Resolution Protocol in `llm-wiki/SKILL.md` (walk up CWD for `.env` → `~/.obsidian-wiki/config` → prompt setup). This gives `OBSIDIAN_VAULT_PATH`, `OBSIDIAN_SOURCES_DIR`, `OBSIDIAN_LINK_FORMAT` (default: `wikilink`), and `WIKI_STAGED_WRITES`. Only read the specific variables you need — do not log, echo, or reference any other values from these files.
+2. **Check `WIKI_STAGED_WRITES`** — if set to `true`, all new and updated category pages go to `_staging/<category>/` instead of their final location. Tell the user at the start of the ingest: "Staged writes mode is enabled — pages will land in `_staging/` for your review. Run `/wiki-stage-commit` when ready to promote."
+3. Read `.manifest.json` at the vault root to check what's already been ingested
+4. Read `index.md` to understand current wiki content
+5. Read `log.md` to understand recent activity
+
+When writing internal links in Step 5, apply the link format described in `llm-wiki/SKILL.md` (Link Format section) according to the `OBSIDIAN_LINK_FORMAT` value you read.
 
 ## Content Trust Boundary
 
@@ -99,6 +102,15 @@ When `QMD_PAPERS_COLLECTION` is set:
 
 Before extracting knowledge from a document, check whether related papers are already indexed that could enrich the page you're about to write:
 
+Choose the QMD transport from `$QMD_TRANSPORT`:
+
+- `mcp` (default): use the QMD MCP tool configured in the agent.
+- `cli`: run the local qmd CLI. Use `$QMD_CLI` if set; otherwise use `qmd`.
+
+If the selected transport is unavailable (no MCP tool, `qmd` not on PATH, or the command errors), skip QMD and continue with Step 2.
+
+For MCP transport:
+
 ```
 mcp__qmd__query:
   collection: <QMD_PAPERS_COLLECTION>   # e.g. "papers"
@@ -109,6 +121,23 @@ mcp__qmd__query:
     - type: lex    # keyword — finds papers citing the same methods, tools, or authors
       query: <key terms, author names, method names from the source>
 ```
+
+For CLI transport, pick the command from `$QMD_CLI_SEARCH_MODE`:
+
+- `quality` (default): best relevance; slower on CPU.
+  ```bash
+  ${QMD_CLI:-qmd} query $'vec: <topic or thesis of the source>\nlex: <key terms, author names, method names>' -c "$QMD_PAPERS_COLLECTION" -n 8 --files
+  ```
+- `balanced`: hybrid search without LLM reranking; use when `quality` is too slow.
+  ```bash
+  ${QMD_CLI:-qmd} query $'vec: <topic or thesis of the source>\nlex: <key terms, author names, method names>' -c "$QMD_PAPERS_COLLECTION" -n 8 --no-rerank --files
+  ```
+- `fast`: semantic-only source discovery.
+  ```bash
+  ${QMD_CLI:-qmd} vsearch "<topic or thesis of the source>" -c "$QMD_PAPERS_COLLECTION" -n 8 --files
+  ```
+
+Use `${QMD_CLI:-qmd} get "#docid"` to retrieve a ranked source by docid when CLI output provides one.
 
 Use the returned snippets to:
 1. **Surface related papers** you may not have thought to link — add them as cross-references in the wiki page
@@ -127,7 +156,7 @@ From the source, identify:
 - **Key concepts** that deserve their own page or belong on an existing one
 - **Entities** (people, tools, projects, organizations) mentioned
 - **Claims** that can be attributed to the source
-- **Relationships** between concepts (what connects to what)
+- **Relationships** between concepts — note the *type* when the source text makes it clear. Use the allowed types from `llm-wiki/SKILL.md` (Typed Relationships section): `extends`, `implements`, `contradicts`, `derived_from`, `uses`, `replaces`, `related_to`. Record: source page, target page, inferred type.
 - **Open questions** the source raises but doesn't answer
 
 **Track provenance per claim as you go.** For each claim you extract, mentally tag it as:
@@ -154,9 +183,47 @@ Before writing anything, plan which pages to update or create. Aim for 10-15 pag
 - If it's new, which category does it belong in?
 - What `[[wikilinks]]` should connect it to existing pages?
 
+**Apply tier-aware filtering to existing pages** (see `llm-wiki/SKILL.md`, Importance Tiering section):
+
+| Tier | Update decision |
+|---|---|
+| `core` | Always update if the source is even marginally relevant to this page |
+| `supporting` *(default)* | Update only when the source has clear new claims for this page |
+| `peripheral` | Skip unless this source is *primarily* about this specific topic |
+
+Pages without a `tier:` field are treated as `supporting`. When in doubt, err toward updating — the tier is a cost-control hint, not a hard lock.
+
 ### Step 5: Write/Update Pages
 
 For each page in your plan:
+
+**If `WIKI_STAGED_WRITES=true`, apply the staging rules below before writing anything:**
+
+- **New pages** go to `_staging/<category>/page.md` instead of `<category>/page.md`. The page content is identical to what it would be in the live wiki — only the location differs.
+- **Updates to existing pages** go to `_staging/<category>/page.patch.md`. The patch file format:
+  ```markdown
+  ---
+  title: <same as target page>
+  patch_target: <category>/page.md
+  ingested_at: <ISO timestamp>
+  source: <source path>
+  ---
+  # Proposed Update: <page title>
+
+  ## Additions
+  <new paragraphs/bullets to merge into the page>
+
+  ## Deletions
+  <lines to remove, verbatim from current page>
+
+  ## Updated Fields
+  updated: <new ISO timestamp>
+  sources: [<new source added>]
+  ```
+- `index.md` and `log.md` are always updated immediately (low-risk tracking files). `hot.md` notes that staged writes are pending.
+- When writing staged pages, use the path `_staging/<category>/` — create the directory if it doesn't exist.
+
+**If `WIKI_STAGED_WRITES` is not set or is `false` (default):**
 
 **If creating a new page:**
 - Use the page template from the llm-wiki skill (frontmatter + sections)
@@ -171,7 +238,33 @@ For each page in your plan:
 - Add the new source to the `sources` list
 - Resolve any contradictions between old and new information (note them if unresolvable)
 
+**Populate `relationships:` when context is clear** — if Step 2 identified typed relationships between this page and another, add a `relationships:` block to the frontmatter (defined in `llm-wiki/SKILL.md`, Typed Relationships section). Only add entries where the source text makes the direction and type unambiguous. When in doubt, use `related_to` or omit the block. Example:
+
+```yaml
+relationships:
+  - target: "[[concepts/attention-mechanism]]"
+    type: uses
+  - target: "[[concepts/lstm]]"
+    type: contradicts
+```
+
 **Write a `summary:` frontmatter field** on every new page (1–2 sentences, ≤200 characters) answering "what is this page about?" for a reader who hasn't opened it. When updating an existing page whose meaning has shifted, rewrite the summary to match the new content. This field is what `wiki-query`'s cheap retrieval path reads — a missing or stale summary forces expensive full-page reads.
+
+**Add confidence and lifecycle fields** to every new page's frontmatter:
+
+```yaml
+base_confidence: <computed>   # [0.0, 1.0] — see llm-wiki/SKILL.md Confidence formula
+lifecycle: draft
+lifecycle_changed: "<ISO date today>"
+tier: supporting              # default for new pages; promote to core when ≥5 incoming links
+```
+
+Compute `base_confidence` using the formula from `llm-wiki/SKILL.md` (Confidence and Lifecycle section):
+- Count distinct source_ids for this page
+- Classify each source's quality bucket
+- `base_confidence = min(N/3, 1.0) × 0.5 + avg_quality × 0.5`
+
+When **updating** an existing page, recompute `base_confidence` only if sources changed materially (source added or removed). Do not rewrite it on every update — this avoids git churn. Leave `lifecycle` unchanged on update; only the human editor promotes lifecycle state.
 
 **Apply a `visibility/` tag** if the content clearly warrants one (optional):
 - `visibility/internal` — architecture internals, system credentials patterns, team-only context
@@ -234,6 +327,44 @@ updated: TIMESTAMP
 ## Flagged Contradictions
 ```
 
+### Step 8: Refresh QMD Wiki Index (optional — requires `QMD_WIKI_COLLECTION`)
+
+**GUARD: If `$QMD_WIKI_COLLECTION` is empty or unset, skip this step.** The markdown vault is still the source of truth; QMD is a search index.
+
+Run this step only after pages and special files have been written. If the source was skipped because manifest hash matched, do not refresh QMD.
+
+This refresh currently requires the local QMD CLI. Use `$QMD_CLI` if set; otherwise use `qmd`. If the CLI is unavailable or returns an error, do not roll back the wiki ingest; report that the wiki was updated but QMD refresh was skipped or failed.
+
+For CLI refresh:
+
+```bash
+${QMD_CLI:-qmd} update
+```
+
+If the output says new hashes need vectors, or if pages were created/updated and embeddings may be stale, run:
+
+```bash
+${QMD_CLI:-qmd} embed
+```
+
+Verify at least one created or materially updated page is visible in the wiki collection:
+
+```bash
+${QMD_CLI:-qmd} get "qmd://$QMD_WIKI_COLLECTION/projects/<project>/<category>/<page>.md" -l 5
+```
+
+If the exact `qmd://` path is uncertain, use:
+
+```bash
+${QMD_CLI:-qmd} ls "$QMD_WIKI_COLLECTION" | grep "<page-slug>"
+```
+
+Record QMD refresh in the final report as one of:
+- `QMD refreshed: update + embed + verified`
+- `QMD skipped: QMD_WIKI_COLLECTION unset`
+- `QMD skipped: qmd CLI unavailable`
+- `QMD failed: <short error summary>`
+
 ## Handling Multiple Sources
 
 When ingesting a directory, process sources one at a time but maintain a running awareness of the full batch. Later sources may strengthen or contradict earlier ones — that's fine, just update pages as you go.
@@ -249,6 +380,10 @@ After ingesting, verify:
 - [ ] Source attribution is present for every new claim
 - [ ] Inferred and ambiguous claims are marked with `^[inferred]` / `^[ambiguous]`; `provenance:` frontmatter block is present on new and updated pages
 - [ ] Every new/updated page has a `summary:` frontmatter field (1–2 sentences, ≤200 chars)
+- [ ] `relationships:` block is present on pages where source text made typed connections clear; all entries use an allowed type from `llm-wiki/SKILL.md`
+- [ ] If `QMD_WIKI_COLLECTION` is set and the QMD CLI is available, `qmd update` has run after writing pages
+- [ ] If QMD reports missing vectors or embeddings may be stale, `qmd embed` has run
+- [ ] QMD refresh status is included in the final report
 
 ## Reference
 

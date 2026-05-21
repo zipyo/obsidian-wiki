@@ -15,9 +15,11 @@ You are ingesting arbitrary text data into an Obsidian wiki. The source could be
 
 ## Before You Start
 
-1. Read `.env` to get `OBSIDIAN_VAULT_PATH`
+1. **Resolve config** — follow the Config Resolution Protocol in `llm-wiki/SKILL.md` (walk up CWD for `.env` → `~/.obsidian-wiki/config` → prompt setup). This gives `OBSIDIAN_VAULT_PATH` and `OBSIDIAN_LINK_FORMAT` (default: `wikilink`).
 2. Read `.manifest.json` at the vault root — check if this source has been ingested before
 3. Read `index.md` at the vault root to know what already exists
+
+When writing internal links, apply the link format from `llm-wiki/SKILL.md` (Link Format section) using the `OBSIDIAN_LINK_FORMAT` value.
 
 If the source path is already in `.manifest.json` and the file hasn't been modified since `ingested_at`, tell the user it's already been ingested. Ask if they want to re-ingest anyway.
 
@@ -119,6 +121,13 @@ Follow the `wiki-ingest` skill's process for creating/updating pages:
 - Attribute claims to their source
 - **Write a `summary:` frontmatter field** on every new page (1–2 sentences, ≤200 characters) answering "what is this page about?" — this is what downstream skills read to avoid opening the page body.
 - **Apply provenance markers** per the convention in `llm-wiki`. Conversation, log, and chat data tend to be high-inference — you're often reading between the turns to extract a coherent claim. Be liberal with `^[inferred]` for synthesized patterns and with `^[ambiguous]` when speakers contradict each other or you're unsure who's right. Write a `provenance:` frontmatter block on each new/updated page.
+- **Add confidence and lifecycle fields** to every new page:
+  ```yaml
+  base_confidence: 0.37
+  lifecycle: draft
+  lifecycle_changed: <ISO date today>
+  ```
+  The caller may pass an explicit quality override (e.g. `quality: documentation`) — if so, recompute: `base_confidence = round(0.17 + 0.5 × quality_score, 2)` using the quality table in `llm-wiki/SKILL.md`. Default is `unknown` (0.4) → 0.37.
 
 ## Step 5: Update Manifest and Special Files
 
@@ -149,3 +158,38 @@ Follow the `wiki-ingest` skill's process for creating/updating pages:
 - **Multiple files:** Process them in order, building up wiki pages incrementally.
 - **Binary files:** Skip them, *except* images — those are first-class sources via the Read tool's vision support.
 - **Encoding issues:** If you see garbled text, mention it to the user and move on.
+
+## QMD Refresh After Vault Writes
+
+QMD is a search index, not the source of truth. If `$QMD_WIKI_COLLECTION` is empty or unset, skip this step. Run it only after this skill has written or rewritten vault markdown. If QMD refresh fails, do not roll back the vault changes; report the QMD status separately.
+
+Use `$QMD_CLI` if set; otherwise use `qmd`.
+
+```bash
+${QMD_CLI:-qmd} update
+```
+
+If the output says vectors are needed or embeddings may be stale, run:
+
+```bash
+${QMD_CLI:-qmd} embed
+```
+
+Verify the collection with either:
+
+```bash
+${QMD_CLI:-qmd} ls "$QMD_WIKI_COLLECTION"
+```
+
+or, when a specific page path is known:
+
+```bash
+${QMD_CLI:-qmd} get "qmd://$QMD_WIKI_COLLECTION/<page>.md" -l 5
+```
+
+Record one of:
+- `QMD refreshed: update + embed + verified`
+- `QMD refreshed: update only + verified`
+- `QMD skipped: QMD_WIKI_COLLECTION unset`
+- `QMD skipped: qmd CLI unavailable`
+- `QMD failed: <short error summary>`

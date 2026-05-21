@@ -159,12 +159,19 @@ title: Page Title
 category: concepts
 tags: [ml, architecture]
 aliases: [alternate name]
+relationships:
+  - target: "[[concepts/related-concept]]"
+    type: extends
 sources: [papers/attention.pdf]
 summary: One or two sentences, ≤200 chars, so a reader (or another skill) can preview this page without opening it.
 provenance:
   extracted: 0.72
   inferred: 0.25
   ambiguous: 0.03
+base_confidence: 0.65
+lifecycle: draft
+lifecycle_changed: 2024-03-15
+tier: supporting
 created: 2024-03-15T10:30:00Z
 updated: 2024-03-15T10:30:00Z
 ---
@@ -224,6 +231,153 @@ provenance:
 
 These are best-effort numbers written by the ingest skill at create/update time. `wiki-lint` recomputes them and flags drift. The block is optional — pages without it are treated as fully extracted by convention.
 
+## Typed Relationships
+
+Plain `[[wikilinks]]` in page bodies carry no semantic weight — they indicate "related to" but not *how*. The optional `relationships:` frontmatter block adds typed, directional edges to the knowledge graph.
+
+### The `relationships:` block
+
+```yaml
+relationships:
+  - target: "[[Transformer Architecture]]"
+    type: extends
+  - target: "[[LSTM]]"
+    type: contradicts
+  - target: "[[Attention Mechanism]]"
+    type: implements
+```
+
+Each entry has two required fields:
+- `target` — a wikilink (using the same format as `OBSIDIAN_LINK_FORMAT`) to the related page
+- `type` — one of the allowed semantic types below
+
+### Allowed relationship types
+
+| Type | Meaning | Example |
+|---|---|---|
+| `extends` | This page builds on or generalises the target | GPT extends Transformer Architecture |
+| `implements` | This page is a concrete realisation of the target concept | BERT implements Masked Language Modelling |
+| `contradicts` | This page's claims conflict with or refute the target | Evidence A contradicts Evidence B |
+| `derived_from` | This page is based on or adapted from the target | Fine-tuning is derived from Transfer Learning |
+| `uses` | This page depends on or relies on the target | RAG uses Vector Databases |
+| `replaces` | This page supersedes or deprecates the target | GPT-4 replaces GPT-3 |
+| `related_to` | Catch-all: related but no stronger directional type applies | Concept A is related to Concept B |
+
+### Rules
+
+- **Optional field** — omit the block entirely if no typed relationships are known. Untagged wikilinks remain valid and are treated as `related_to` by `wiki-export`.
+- **Don't duplicate** — if `[[foo]]` already appears as an inline wikilink, the `relationships:` entry just enriches it with a type; it is not a second link.
+- **Direction matters** — the page declaring the entry is the *source*; `target` is the destination. Only declare relationships from this page's perspective.
+- **Don't fabricate** — only add a typed entry when the source material makes the relationship direction and type clear. When in doubt, use `related_to` or omit.
+
+Skills that read `relationships:`: `wiki-export` (emits typed edges), `cross-linker` (writes typed entries when inferring links), `wiki-query` (may surface type in answers).
+
+## Confidence and Lifecycle
+
+Every page carries two orthogonal trust signals plus an optional supersession link.
+
+### Required fields
+
+```yaml
+base_confidence: 0.65          # [0.0, 1.0] — time-independent quality estimate. Stored once, recomputed on content change.
+lifecycle: draft               # draft | reviewed | verified | disputed | archived
+lifecycle_changed: 2024-03-15  # ISO date of last state transition
+# lifecycle_reason: "..."      # optional free-text — why the state changed; surfaced by wiki-query
+# superseded_by: "[[new-page]]" # wikilink; only when lifecycle=archived
+```
+
+`lifecycle_reason` and `superseded_by` are optional. Never fabricate them.
+
+### Confidence formula
+
+```
+base_confidence = source_count_score * 0.5 + source_quality_score * 0.5
+
+source_count_score   = min(distinct_source_ids / 3, 1.0)
+source_quality_score = avg(quality score per distinct source_id)
+```
+
+**Source-quality scores** (use the highest-matching bucket):
+
+| Bucket | Score | Examples |
+|---|---|---|
+| `paper` | 1.0 | arXiv, conference proceedings |
+| `official` | 0.9 | `*.gov`, vendor docs |
+| `documentation` | 0.85 | well-maintained third-party docs |
+| `book` | 0.8 | books, technical references |
+| `repository` | 0.75 | GitHub READMEs, codebases |
+| `blog` | 0.55 | personal blogs |
+| `session_transcript` | 0.5 | conversation history |
+| `forum` | 0.4 | Stack Overflow, HN, Reddit |
+| `unknown` | 0.4 | catch-all |
+| `llm_generated` | 0.3 | LLM self-reflections |
+
+**A `source_id`** is a stable per-source identifier — prevents counting three copies of the same blog as three distinct sources:
+
+| Source type | source_id rule |
+|---|---|
+| Academic paper | DOI > arXiv ID > `<author>-<year>-<slug>` |
+| GitHub repo | `github.com/<owner>/<repo>` |
+| Documentation site | `<canonical-host>/<product>` |
+| Blog post | `<host>/<author>` |
+| Session transcript | `<agent>/<session-id>` |
+| Other | `<canonical-url>` |
+
+**Per-skill defaults** (ingest skills compute this automatically):
+
+| Skill | base_confidence | lifecycle |
+|---|---|---|
+| `ingest-url` | `0.17 + 0.5 × classify(url)` | `draft` |
+| `wiki-ingest` (single doc) | per-source classifier | `draft` |
+| `wiki-ingest` (multi-doc) | `min(N/3,1)×0.5 + avg_q×0.5` | `draft` |
+| `wiki-research` | varies, often 0.85+ | `draft` |
+| `wiki-capture` | 0.42 | `draft` |
+| `*-history-ingest` | 0.42 | `draft` |
+| `wiki-update` | 0.59 | `draft` |
+| `wiki-synthesize` | `min(input_pages.base_confidence)` | `draft` |
+| `data-ingest` | 0.37 | `draft` |
+
+### Lifecycle state machine
+
+Five states. **`stale` is not a state** — it is a computed overlay: `is_stale = (today − updated) > 90 days`.
+
+| State | Entered by | Notes |
+|---|---|---|
+| `draft` | Any ingest skill on first write | Default for all new pages |
+| `reviewed` | Human edit only | |
+| `verified` | Human edit only | Time alone never demotes verified pages |
+| `disputed` | Manual edit only | Overrides every state except `archived` in display |
+| `archived` | Manual edit, or ingest skill setting `superseded_by` | Terminal |
+
+Only ingest skills set `draft`. All other transitions require a human editor. Update `lifecycle_changed` whenever the state changes.
+
+## Importance Tiering
+
+The `tier:` field controls which pages get updated on each ingest pass and their priority in retrieval. As wikis grow, re-reading every page on every ingest wastes tokens — tiering lets ingest and query skills focus effort where it matters most.
+
+### Three tiers
+
+| Tier | Meaning | Ingest behavior | Query priority |
+|---|---|---|---|
+| `core` | Load-bearing pages — many other pages depend on them (high incoming-link count or bridge position). Always worth updating. | Always update if the source is even marginally relevant | Surfaced first in index and full-read passes |
+| `supporting` *(default)* | Standard wiki pages with moderate connectivity | Update when the source has clear new claims for this page | Standard priority |
+| `peripheral` | Low-connectivity pages — rarely linked, narrowly scoped | Skip unless the source is *primarily* about this topic | Last resort; skipped when trimming to context budget |
+
+### Assignment rules
+
+- **New pages:** default to `tier: supporting`
+- **Promote to `core`:** when a page accumulates ≥5 incoming wikilinks **or** is flagged as a bridge by `wiki-status` insights mode
+- **Demote to `peripheral`:** when a page has ≤1 incoming link and hasn't been updated in 90+ days
+- **Human override always wins** — edit `tier:` manually to lock a page at any level
+- Existing pages without `tier:` are treated as `supporting` (backward compatible — no migration needed)
+
+### Who manages tier
+
+- `wiki-ingest` reads `tier:` to decide whether to update a page on the current pass
+- `wiki-query` uses `tier:` to order candidates in the index pass and trim to context budget
+- `wiki-status` insights mode computes graph metrics and **suggests** tier assignments — it never writes them automatically
+- `wiki-lint` flags missing `tier:` on newly created pages (Phase 2 enforcement, same timeline as `base_confidence`)
+
 ## Retrieval Primitives
 
 Reading the vault is the dominant cost of every read-side skill. Use the cheapest primitive that can answer the question and **escalate only when the cheaper one is insufficient**. Any skill that needs content from the vault should follow this table rather than jumping straight to full-page reads.
@@ -242,6 +396,12 @@ Reading the vault is the dominant cost of every read-side skill. Use the cheapes
 
 Skills that consume this table: `wiki-query`, `cross-linker`, `wiki-lint`, `wiki-status` (insights mode). Any new skill that reads the vault should cite this section rather than reinvent the pattern.
 
+## QMD Index Freshness
+
+QMD is an optional search index layered on top of the vault. The markdown vault is the source of truth. Any skill that writes wiki markdown should refresh QMD after the vault write completes, but only when `QMD_WIKI_COLLECTION` is configured and the local QMD transport is available. If QMD refresh fails, keep the vault changes and report the QMD status separately.
+
+Use the cheapest verification path that proves the new content is visible: `qmd update`, `qmd embed` only if vectors are stale or missing, then a targeted `qmd get` or `qmd ls` check for one written page or the collection root. Read-only skills should not refresh QMD.
+
 ## Core Principles
 
 1. **Compile, don't retrieve.** The wiki is pre-compiled knowledge. When you ingest a source, update every relevant page — don't just create a summary of the source.
@@ -256,6 +416,72 @@ Skills that consume this table: `wiki-query`, `cross-linker`, `wiki-lint`, `wiki
 
 6. **Obsidian is the IDE.** The user browses and explores the wiki in Obsidian. Everything must be valid Obsidian markdown with working wikilinks.
 
+## Link Format
+
+All internal links connecting wiki pages are controlled by `OBSIDIAN_LINK_FORMAT` from the resolved config (default: `wikilink`).
+
+| Setting | Syntax | Example |
+|---|---|---|
+| `wikilink` *(default)* | `[[path/to/page]]` or `[[path/to/page\|display text]]` | `[[concepts/foo\|foo]]` |
+| `markdown` | `[display text](relative/path.md)` | `[foo](../concepts/foo.md)` |
+
+### Generating markdown-format links
+
+When `OBSIDIAN_LINK_FORMAT=markdown`:
+1. Compute the path from the **current file's directory** to the **target `.md` file** using `..` to climb up as needed.
+2. Use the page title or a natural phrase as display text.
+3. Always include the `.md` extension.
+
+| Current file | Target | Relative link |
+|---|---|---|
+| `index.md` | `concepts/foo.md` | `[foo](concepts/foo.md)` |
+| `concepts/foo.md` | `entities/bar.md` | `[bar](../entities/bar.md)` |
+| `projects/my-project/my-project.md` | `concepts/foo.md` | `[foo](../../concepts/foo.md)` |
+| `projects/my-project/concepts/arch.md` | `entities/bar.md` | `[bar](../../../entities/bar.md)` |
+
+The `[[path\|display text]]` wikilink form maps to `[display text](relative/path.md)` in Markdown mode.
+
+**Scope:** this setting affects only newly written or updated links. Existing vault content is never automatically migrated — users who want to convert old links can run the `cross-linker` or `wiki-lint` skill.
+
+Every write skill reads `OBSIDIAN_LINK_FORMAT` from config before generating links and applies the correct format.
+
+## Config Resolution Protocol
+
+**All skills must resolve config using this algorithm — do not hard-code `.env` or `~/.obsidian-wiki/config` directly.** This ensures single-vault, multi-vault, project-local, and VPS setups all work correctly.
+
+### Resolution order
+
+1. **Walk up from CWD** — look for a `.env` file in the current directory, then each parent, up to `$HOME`. Stop at the first `.env` that contains `OBSIDIAN_VAULT_PATH`.
+2. **Global config** — if no local `.env` found, read `~/.obsidian-wiki/config`.
+3. **Prompt setup** — if neither exists, tell the user: "No config found. Run `wiki-setup` to initialize your wiki."
+
+```
+find_config() {
+  dir="$PWD"
+  while [[ "$dir" != "$HOME" && "$dir" != "/" ]]; do
+    [[ -f "$dir/.env" ]] && grep -q "OBSIDIAN_VAULT_PATH" "$dir/.env" && { echo "$dir/.env"; return; }
+    dir="$(dirname "$dir")"
+  done
+  [[ -f "$HOME/.obsidian-wiki/config" ]] && { echo "$HOME/.obsidian-wiki/config"; return; }
+  echo ""
+}
+```
+
+### Vault-scoped state
+
+Skills that write runtime state (e.g. `daily-update`) must scope that state to the resolved vault, not to a global path. Use:
+
+```
+VAULT_ID=$(echo "$OBSIDIAN_VAULT_PATH" | md5sum 2>/dev/null || md5 -q - <<< "$OBSIDIAN_VAULT_PATH" | cut -c1-8)
+STATE_DIR="$HOME/.obsidian-wiki/state/$VAULT_ID"
+```
+
+### Standard "Before You Start" block
+
+Every skill's setup section should read:
+
+> **Resolve config** — follow the Config Resolution Protocol in `llm-wiki/SKILL.md`. Walk up from CWD for `.env`, fall back to `~/.obsidian-wiki/config`, else prompt setup. This gives `OBSIDIAN_VAULT_PATH` and any tool-specific path overrides.
+
 ## Environment Variables
 
 The wiki is configured through environment variables (see `.env.example`). The only required variable is the vault path — everything else has sensible defaults.
@@ -264,6 +490,13 @@ The wiki is configured through environment variables (see `.env.example`). The o
 - `OBSIDIAN_SOURCES_DIR` — Where raw source documents are
 - `OBSIDIAN_CATEGORIES` — Comma-separated list of categories
 - `CLAUDE_HISTORY_PATH` — Where to find Claude conversation data
+- `CODEX_HISTORY_PATH` — Where to find Codex session data
+- `HERMES_HOME` — Where to find Hermes agent data
+- `OPENCLAW_HOME` — Where to find OpenClaw data
+- `COPILOT_HISTORY_PATH` — Where to find Copilot session data
+- `OBSIDIAN_LINK_FORMAT` — Internal link syntax: `wikilink` (default) or `markdown`
+- `WIKI_TOKEN_WARN_THRESHOLD` — Emit a warning in `wiki-status` when the full-wiki token estimate exceeds this value (default: `100000`). Set to `0` to disable. See `wiki-status` for the token footprint report.
+- `WIKI_STAGED_WRITES` — When `true`, all LLM-written pages go to `_staging/<category>/` for human review before promotion. See `wiki-setup` and `wiki-stage-commit` for details.
 
 No API keys are needed — the agent running these skills already has LLM access built in.
 
