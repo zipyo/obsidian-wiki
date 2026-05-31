@@ -67,8 +67,10 @@ Skills live in `.skills/<name>/SKILL.md`. Match the user's intent to the right s
 | "fix my tags" / "normalize tags" / "tag audit" | `tag-taxonomy` |
 | "update wiki" / "sync to wiki" / "save this to my wiki" | `wiki-update` |
 | "export wiki" / "export graph" / "graphml" / "neo4j" | `wiki-export` |
+| "import wiki" / "import from export" / "load graph.json" / "import vault" / "/wiki-import" | `wiki-import` |
 | "color my graph" / "color code obsidian" / "color by tag/category/visibility" | `graph-colorize` |
 | "save this" / "/wiki-capture" / "capture this" / "file this conversation" | `wiki-capture` |
+| "/wiki-quick-chat-capture" / "quick capture" / "capture this finding" / "save this gotcha" / "drop to raw" | `wiki-quick-chat-capture` |
 | "/wiki-research [topic]" / "research X" / "find everything about Y" | `wiki-research` |
 | "create a dashboard" / "vault dashboard" / "show all X as a table" / "dynamic view" | `wiki-dashboard` |
 | "synthesize my wiki" / "find connections" / "what concepts keep coming up together" / "/wiki-synthesize" | `wiki-synthesize` |
