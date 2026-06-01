@@ -3,6 +3,9 @@
 *.pyc
 __pycache__/
 
+# Local-only Claude instructions (channel session rules, machine-specific)
+CLAUDE.local.md
+
 # Python build artifacts (pyproject.toml / `python -m build`)
 /dist/
 /build/
