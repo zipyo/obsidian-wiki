@@ -3,11 +3,6 @@
 *.pyc
 __pycache__/
 
-# Local-only Claude instructions (channel session rules, machine-specific)
-CLAUDE.local.md
-# Local-only ops script paired with CLAUDE.local.md (telegram session /clear)
-/bin/wiki-clear.sh
-
 # Python build artifacts (pyproject.toml / `python -m build`)
 /dist/
 /build/
@@ -16,5 +11,3 @@ CLAUDE.local.md
 # Agent skill symlinks (created by setup.sh) — these are just pointers to .skills/
 # We track them so cloners get the symlinks too, but if your git doesn't
 # preserve symlinks, run `bash setup.sh` after cloning.
-# Local-only: telegram 채널은 이 디렉터리에서만 활성(프로젝트 스코프 enabledPlugins)
-.claude/settings.json
