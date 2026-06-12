@@ -292,9 +292,51 @@ Both skills degrade gracefully: if `QMD_WIKI_COLLECTION` / `QMD_PAPERS_COLLECTIO
 
 `_raw/` is a staging area inside your vault for unprocessed captures — rough notes, clipboard pastes, quick voice-memo transcripts. Drop files there and the next `wiki-ingest` run will promote them to proper wiki pages and remove the originals.
 
-The fastest way to feed `_raw/` during a live coding session is `/wiki-quick-chat-capture` — it scans the current conversation, extracts bugs and gotchas, and writes structured draft files in under 60 seconds with no subagents or manifest writes.
+The fastest way to feed `_raw/` during a live coding session is `/wiki-capture --quick` — it scans the current conversation, extracts bugs and gotchas, and writes structured draft files in under 60 seconds with no subagents or manifest writes.
 
 The directory is created automatically by `wiki-setup`. The path is configurable via `OBSIDIAN_RAW_DIR` in `.env` (defaults to `_raw`).
+
+---
+
+## Syncing your vault to GitHub
+
+Your vault is a directory of plain markdown files — push it to a private GitHub repo and you get version history, backup, and cross-device sync for free. `setup.sh` (and `obsidian-wiki setup`) will ask you to configure this during the initial install.
+
+**What setup does:**
+
+1. `git init` your vault if it isn't already a repo
+2. Creates a `.gitignore` that excludes Obsidian workspace/cache files
+3. Sets the GitHub remote you supply
+4. Writes `~/.obsidian-wiki/sync.sh` — a one-shot script that stages all changes, commits with a timestamp, and pushes
+5. Optionally adds a `wiki-sync` shell alias
+6. Optionally installs an hourly cron job
+
+**Run a sync at any time:**
+
+```bash
+wiki-sync                    # alias added by setup
+~/.obsidian-wiki/sync.sh     # or call the script directly
+```
+
+Each run commits staged changes as `sync 2026-06-08 14:00` and pushes.
+
+**Manual setup (skip the prompt):**
+
+```bash
+cd /path/to/your/vault
+git init
+git remote add origin https://github.com/you/my-wiki.git
+
+# then commit and push manually, or re-run setup.sh to get the sync script
+```
+
+**Hourly auto-sync via cron (can be enabled during setup):**
+
+```
+0 * * * * ~/.obsidian-wiki/sync.sh >> ~/.obsidian-wiki/sync.log 2>&1
+```
+
+> Keep the repo **private** if your vault contains personal notes. Nothing is sent to any third-party service — your vault lives on your machines and your GitHub account only.
 
 ---
 
@@ -305,7 +347,7 @@ Everything lives in `.skills/`. Each skill is a markdown file the agent reads wh
 | Skill                   | What it does                                      | Slash Command            |
 | ----------------------- | ------------------------------------------------- | ------------------------ |
 | `wiki-setup`            | Initialize vault structure                        | `/wiki-setup`            |
-| `wiki-ingest`           | Distill documents into wiki pages                 | `/wiki-ingest`           |
+| `wiki-ingest`           | Distill documents into wiki pages, plus chat exports, logs, transcripts, URLs | `/wiki-ingest`           |
 | `wiki-history-ingest`   | Unified history router (`claude`, `codex`, `hermes`, `pi`) | `/wiki-history-ingest <claude|codex|hermes|pi>` |
 | `claude-history-ingest` | Mine your `~/.claude` conversations and memories from Claude code and desktop  | `/claude-history-ingest` |
 | `codex-history-ingest`  | Mine your `~/.codex` sessions and rollout logs    | `/codex-history-ingest`  |
@@ -313,9 +355,6 @@ Everything lives in `.skills/`. Each skill is a markdown file the agent reads wh
 | `openclaw-history-ingest` | Mine your `~/.openclaw` MEMORY.md and sessions  | `/openclaw-history-ingest` |
 | `copilot-history-ingest` | Mine your `~/.copilot` CLI session history       | `/copilot-history-ingest` |
 | `pi-history-ingest`     | Mine your `~/.pi/agent/sessions` JSONL history    | `/pi-history-ingest` |
-| `data-ingest`           | Ingest any text — chat exports, logs, transcripts | `/data-ingest`           |
-| `ingest-url`            | Fetch and ingest a URL directly into the wiki     | `/ingest-url <url>`      |
-| `obsidian-wiki-ingest`  | Project-scoped automation wrapper for wiki-ingest | `/obsidian-wiki-ingest`  |
 | `wiki-status`           | Show what's ingested, what's pending, the delta   | `/wiki-status`           |
 | `wiki-rebuild`          | Archive, rebuild from scratch, or restore         | `/wiki-rebuild`          |
 | `wiki-query`            | Answer questions from the wiki                    | `/wiki-query`            |
@@ -325,8 +364,7 @@ Everything lives in `.skills/`. Each skill is a markdown file the agent reads wh
 | `llm-wiki`              | The core pattern and architecture reference       | `/llm-wiki`              |
 | `wiki-update`           | Sync current project's knowledge into the vault   | `/wiki-update`           |
 | `wiki-export`           | Export vault graph to JSON, GraphML, Neo4j, HTML  | `/wiki-export`           |
-| `wiki-capture`          | Save the current conversation as a wiki note      | `/wiki-capture`          |
-| `wiki-quick-chat-capture` | Zero-friction mid-session finding capture to `_raw/` | `/wiki-quick-chat-capture` |
+| `wiki-capture`          | Save the current conversation as a wiki note; `--quick` stages findings to `_raw/` | `/wiki-capture`          |
 | `wiki-research`         | Autonomous multi-round web research, self-filed   | `/wiki-research [topic]` |
 | `wiki-dashboard`        | Create dynamic Obsidian Bases dashboard views     | `/wiki-dashboard`        |
 | `wiki-synthesize`       | Discover and fill synthesis gaps across concepts  | `/wiki-synthesize`       |
@@ -374,7 +412,6 @@ obsidian-wiki/
 │   ├── hermes-history-ingest/SKILL.md
 │   ├── openclaw-history-ingest/SKILL.md
 │   ├── pi-history-ingest/SKILL.md
-│   ├── data-ingest/SKILL.md
 │   ├── wiki-status/SKILL.md
 │   ├── wiki-rebuild/SKILL.md
 │   ├── wiki-query/SKILL.md

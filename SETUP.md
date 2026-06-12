@@ -43,7 +43,7 @@ Open this project in your coding agent and tell it what you want:
 | "Import my Claude history" | `claude-history-ingest` |
 | "Import my Codex history" | `codex-history-ingest` |
 | "Import my Pi history" | `pi-history-ingest` |
-| "Process this ChatGPT export" | `data-ingest` |
+| "Process this ChatGPT export" | `wiki-ingest` |
 | "What's the status of my wiki?" | `wiki-status` |
 | "What do I know about X?" | `wiki-query` |
 | "Audit my wiki" | `wiki-lint` |
@@ -65,10 +65,10 @@ Anything text-based:
 | Claude Code history | `claude-history-ingest` | `~/.claude/` — conversations, memories, sessions |
 | Codex CLI history | `codex-history-ingest` | `~/.codex/` — sessions, rollouts, history index |
 | Pi agent sessions | `pi-history-ingest` | `~/.pi/agent/sessions/` — tree-structured JSONL |
-| ChatGPT exports | `data-ingest` | `conversations.json` from ChatGPT export |
-| Slack / Discord logs | `data-ingest` | Channel export JSON files |
-| Meeting transcripts | `data-ingest` | Any text transcript |
-| Raw text dumps | `data-ingest` | Anything — CSV, logs, journals, notes |
+| ChatGPT exports | `wiki-ingest` | `conversations.json` from ChatGPT export |
+| Slack / Discord logs | `wiki-ingest` | Channel export JSON files |
+| Meeting transcripts | `wiki-ingest` | Any text transcript |
+| Raw text dumps | `wiki-ingest` | Anything — CSV, logs, journals, notes |
 
 ## Tracking & Delta
 
@@ -139,9 +139,8 @@ Knowledge that's project-specific goes under `projects/<name>/`. Knowledge that'
 |---|---|
 | `llm-wiki` | Core pattern — 3-layer architecture, page templates, project org |
 | `wiki-setup` | Initialize vault structure, create index/log, configure Obsidian |
-| `wiki-ingest` | Distill source documents into wiki pages (append or full mode) |
+| `wiki-ingest` | Distill source documents into wiki pages (append or full mode), plus any raw text — chat exports, logs, transcripts, anything |
 | `wiki-history-ingest` | Unified history ingest router (`claude`, `codex`, `pi`) |
-| `data-ingest` | Ingest any raw text — chat exports, logs, transcripts, anything |
 | `claude-history-ingest` | Mine `~/.claude` conversations and memories into wiki pages |
 | `codex-history-ingest` | Mine `~/.codex` sessions and rollout logs into wiki pages |
 | `pi-history-ingest` | Mine `~/.pi/agent/sessions` JSONL history into wiki pages |

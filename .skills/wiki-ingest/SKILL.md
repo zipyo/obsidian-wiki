@@ -1,12 +1,17 @@
 ---
 name: wiki-ingest
 description: >
-  Ingest documents into the Obsidian wiki by distilling their knowledge into interconnected wiki pages.
-  Use this skill whenever the user wants to add new sources to their wiki, process a document or directory,
-  import articles, papers, or notes into their knowledge base, or says things like "add this to the wiki",
-  "process these docs", "ingest this folder". Also triggers when the user drops a file and wants it
-  incorporated into their existing knowledge base. Also handles raw mode: "process my drafts", "promote
-  my raw pages", or any reference to the _raw/ staging directory.
+  Ingest any source into the Obsidian wiki by distilling its knowledge into interconnected wiki pages.
+  Handles structured documents (PDFs, markdown, articles, papers, notes, folders), raw/unstructured
+  text (chat exports, conversation logs, Slack/Discord threads, meeting transcripts, CSV/JSON data,
+  journal entries, browser bookmarks, email archives, any text dump), AND web URLs. Use whenever the
+  user wants to add new sources to their wiki: "add this to the wiki", "process these docs", "ingest
+  this folder", "ingest this data", "process this export", "process these logs", "import my chat
+  history from X", "/ingest-url <url>", "add this URL", "ingest this link", "save this page", or pastes
+  a URL and says "add this" / "save this to my wiki". Also triggers when the user drops a file and
+  wants it incorporated, or for raw mode: "process my drafts", "promote my raw pages", or any reference
+  to the _raw/ staging directory. This is the general catch-all ingest skill for any document, text, or
+  URL source not covered by a more specific ingest skill (claude-history-ingest, etc.).
 ---
 
 # Obsidian Ingest — Document Distillation
@@ -64,20 +69,53 @@ Process draft pages from the `_raw/` staging directory inside the vault. Use whe
 
 In raw mode, each file in `OBSIDIAN_VAULT_PATH/_raw/` (or `OBSIDIAN_RAW_DIR`) is treated as a source. After promoting a file to a proper wiki page, **delete the original from `_raw/`**. Never leave promoted files in `_raw/` — they'll be double-processed on the next run.
 
+**Source inheritance:** The `_raw/` path is a staging artifact — never use it as the `sources:` value on the promoted page. Derive the source entry from the `_raw/` file's own frontmatter instead:
+
+- If the file has both `capture_source` and `sources:` fields, synthesize a combined entry:
+  `"agent:<capture_source> <sources-value>"` — e.g. `"agent:claude-session obsidian-wiki session (2026-05-29)"`
+- If the file has only `sources:`, copy those entries verbatim.
+- Only fall back to the `_raw/` filename if the file has no `sources:` or `capture_source` fields at all.
+
 **Deletion safety:** Only delete the specific file that was just promoted. Before deleting, verify the resolved path is inside `$OBSIDIAN_VAULT_PATH/_raw/` — never delete files outside this directory. Never use wildcards or recursive deletion (`rm -rf`, `rm *`). Delete one file at a time by its exact path.
 
 ## The Ingest Process
 
 ### Step 1: Read the Source
 
-Read the document(s) the user wants to ingest. In append mode, skip files the manifest says are already ingested and unchanged. Supported formats:
+Read the source(s) the user wants to ingest. In append mode, skip files the manifest says are already ingested and unchanged. Supported formats:
 - Markdown (`.md`) — read directly
 - Text (`.txt`) — read directly
 - PDF (`.pdf`) — use the Read tool with page ranges
 - Web clippings — markdown files from Obsidian Web Clipper
+- **Structured data** (`.json`, `.jsonl`, `.csv`, `.tsv`, `.html`) — parse the structure first, then distill the knowledge it carries. See *Unstructured & conversational sources* below.
+- **Chat / conversation exports** — ChatGPT `conversations.json`, Slack/Discord channel JSON, timestamped chat logs, meeting transcripts. See *Unstructured & conversational sources* below.
 - **Images** (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`) — *requires a vision-capable model*. Use the Read tool, which renders the image into your context. Treat screenshots, whiteboard photos, diagrams, and slide captures as first-class sources. If your model doesn't support vision, skip image sources and tell the user which files were skipped so they can re-run with a vision-capable model.
 
 Note the source path — you'll need it for provenance tracking.
+
+### Unstructured & conversational sources
+
+Not every source is a clean document. When the user points you at raw data — chat exports, logs, CSVs, JSON dumps, transcripts, email/bookmark archives — **figure out the format first, then distill the substance.** When in doubt about a format, just read it: the Read tool shows you what you're dealing with.
+
+| Format | How to identify | How to read |
+|---|---|---|
+| **JSON / JSONL** | `.json` / `.jsonl`, starts with `{` or `[` | Parse with Read, look for message/content fields |
+| **CSV / TSV** | `.csv` / `.tsv`, comma/tab separated | Parse rows, identify columns |
+| **HTML** | `.html`, starts with `<` | Extract text content, ignore markup |
+| **Chat export** | Turn-taking patterns (user/assistant, human/ai, timestamps) | Extract the dialogue turns |
+
+Common chat export shapes:
+- **ChatGPT export** (`conversations.json`): `[{"title": …, "mapping": {"node-id": {"message": {"role": …, "content": {"parts": […]}}}}}]`
+- **Slack export** (per-channel JSON): `[{"user": "U123", "text": …, "ts": …}]`
+- **Generic chat log**: `[2024-03-15 10:30] User: message`
+
+**Distill substance, not dialogue.** A 50-message debugging session might yield one `skills/` page about the fix; a long brainstorm might yield three `concepts/` pages. Skip greetings, pleasantries, meta-conversation, repetitive back-and-forth, and raw code dumps (unless they show a reusable pattern). Cluster extracted knowledge by **topic**, not by source file or conversation — a long thread or twenty screenshots of the same bug should produce pages organized by subject, not one page per message. Conversation/log data is high-inference: be liberal with `^[inferred]` for synthesized patterns and `^[ambiguous]` when speakers contradict each other.
+
+**Large files:** read in chunks with offset/limit — don't load a 10 MB JSON at once. **Encoding issues:** if text is garbled, mention it to the user and move on. **Binary files:** skip them (except images, which are first-class via the Read tool).
+
+### Web URL sources
+
+When the source is a **web URL** (`/ingest-url <url>`, "add this URL", "ingest this link", "save this page", or a pasted link), the flow is different: detect the current project, fetch with `defuddle`/`WebFetch`, then file the page into the detected project's `references/` folder or fall back to `misc/` with affinity scoring for later promotion. **Read `references/url-sources.md` and follow it** — it covers project detection, clean extraction, dedup, slug generation, project-vs-misc frontmatter, affinity scoring, stub handling on fetch failure, and the `INGEST_URL` log/manifest format. The rest of this skill (config, trust boundary, QMD refresh) still applies.
 
 ### Multimodal branch (images)
 
@@ -229,7 +267,7 @@ For each page in your plan:
 - Use the page template from the llm-wiki skill (frontmatter + sections)
 - Place in the correct category directory
 - Add `[[wikilinks]]` to at least 2-3 existing pages
-- Include the source in the `sources` frontmatter field
+- Include the source in the `sources` frontmatter field. In raw mode: derive from `capture_source` + `sources` frontmatter of the `_raw/` file — never use the `_raw/` path itself (see Raw Mode section)
 
 **If updating an existing page:**
 - Read the current page first
@@ -292,7 +330,7 @@ After writing pages, check that wikilinks work in both directions. If page A lin
   "size_bytes": FILE_SIZE,
   "modified_at": FILE_MTIME,
   "content_hash": "sha256:<64-char-hex>",
-  "source_type": "document",  // or "image" for png/jpg/webp/gif and image-only PDFs
+  "source_type": "document",  // or "image" for png/jpg/webp/gif and image-only PDFs; "data" for chat/log/CSV/JSON sources
   "project": "project-name-or-null",
   "pages_created": ["list/of/pages.md"],
   "pages_updated": ["list/of/pages.md"]

@@ -41,13 +41,13 @@ Import preview
 
 ## Step 2: Determine Conflict Resolution Mode
 
-Read the user's phrasing to determine mode. Default is `skip`.
+Read the user's phrasing to determine mode. Default is `merge`.
 
 | Mode | Trigger phrases | Behaviour |
 |---|---|---|
-| `skip` | (default, no special phrasing) | Leave existing pages untouched |
-| `overwrite` | "overwrite", "replace existing", "force import" | Replace existing pages with reconstructed stubs |
-| `merge` | "merge", "update existing", "fill in missing" | Preserve existing body; update frontmatter tags/summary/relationships and add missing wikilinks to Related section |
+| `merge` | (default, no special phrasing) | Existing pages: update frontmatter tags/summary/relationships and add missing wikilinks; new pages: create stub. |
+| `skip` | "skip existing", "don't overwrite", "only new pages" | Leave existing pages completely untouched; only create pages that don't exist yet. |
+| `overwrite` | "overwrite", "replace existing", "force import" | Replace all matched pages with freshly reconstructed stubs regardless of existing content. |
 
 ## Step 3: Build Internal Maps
 
@@ -75,10 +75,12 @@ For each node in `nodes`:
 1. Compute `page_path = $VAULT/<node.id>.md`
 2. Ensure the parent directory exists (e.g. `$VAULT/concepts/`)
 3. Check if the file already exists:
+   - **merge mode (default) + exists** → read existing file, apply merge logic (see below), increment `merged`
+   - **merge mode (default) + doesn't exist** → proceed to create stub, increment `created`
    - **skip mode + exists** → increment `skipped`, continue to next node
-   - **overwrite mode + exists** → proceed (will overwrite)
-   - **merge mode + exists** → read existing file, apply merge logic (see below), increment `merged`
-   - **doesn't exist** → proceed to create, increment `created`
+   - **skip mode + doesn't exist** → proceed to create stub, increment `created`
+   - **overwrite mode + exists** → proceed to write fresh stub (overwrite), increment `merged`
+   - **overwrite mode + doesn't exist** → proceed to create stub, increment `created`
 
 ### Page template (new or overwrite)
 
@@ -195,20 +197,16 @@ Wiki import complete → $OBSIDIAN_VAULT_PATH
   Source:  <graph.json path>
            exported at <graph.exported_at>, <N> nodes, <M> links
   Created: <X> pages
-  Skipped: <Y> pages (already exist — use "merge" or "overwrite" to update)
-  Merged:  <Z> pages
+  Merged:  <Z> pages  (existing pages updated)
+  Skipped: <Y> pages  (only when --skip mode was used)
 ```
 
-If all pages were skipped (Y = N), add a hint:
-```
-  Hint: all pages already exist. Re-run with "merge" to update existing pages,
-        or "overwrite" to replace them with stubs from the export.
-```
+Only show the `Skipped` line if `skip` mode was explicitly requested. If `overwrite` mode was used, label merged pages as `Replaced` instead.
 
 ## Notes
 
 - **Stub quality**: Imported pages are stubs — they have structure and wikilinks but no full body content. They're starting points for future ingestion, not finished pages.
-- **Re-running is safe**: In `skip` mode, re-running the same import is a no-op. Use `merge` for incremental updates from a re-exported graph.
+- **Re-running is safe**: The default `merge` mode is idempotent — re-running on an unchanged export will update timestamps but won't destroy content. Use `overwrite` only when you want to fully reset pages to stubs.
 - **Directory creation**: Always create missing category directories before writing pages.
 - **Broken wikilinks**: Since pages are being created together from the same export, most links will resolve. Any node referenced in `links` but absent from `nodes` (broken in the original export) will still appear as a wikilink — it just won't have a corresponding page file, which is valid.
 - **Filtered exports**: If the source `graph.json` was produced with visibility filtering (noted in `graph.metadata`), imported pages will only reflect the filtered set. Note this in the summary if `graph.graph` contains a `filtered` key.
